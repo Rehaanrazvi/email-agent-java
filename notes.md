@@ -105,3 +105,68 @@ secret managers like AWS Secrets Manager or HashiCorp Vault.
 **2. Commit and push:**
 ```
 feat: Phase 1 complete - IMAP email fetching working
+
+
+
+
+## Phase 2 — Send Emails (SMTP)
+
+### What we did
+Added the ability to send emails using Gmail's SMTP server.
+Tested by sending an email to ourselves and confirming it arrived.
+
+### Why we did it
+The agent needs to be able to REPLY to emails. Without SMTP,
+it can only read — it has no voice. This is the foundation
+for auto-replies in Phase 5.
+
+### How it works — the flow
+SmtpService gets (to, subject, body) →
+creates SMTP session with Gmail credentials →
+builds a MimeMessage → Transport.send() delivers it
+
+### Key files created
+- `service/SmtpService.java` — connects to Gmail SMTP and sends emails
+
+### Concepts learned
+
+**SMTP (Simple Mail Transfer Protocol)**
+- Protocol specifically for SENDING emails
+- Gmail SMTP server: smtp.gmail.com, port 587
+- Port 587 uses STARTTLS — starts as plain connection then
+  upgrades to encrypted. More firewall-friendly than port 465.
+
+**STARTTLS vs SSL**
+- IMAP used port 993 with SSL (encrypted from the start)
+- SMTP uses port 587 with STARTTLS (upgrades to encrypted)
+- Both are secure — just different handshake approaches
+
+**Jakarta Mail classes used**
+- `Session.getInstance(props, Authenticator)` — session with auth
+- `Authenticator` — anonymous class that provides credentials
+- `PasswordAuthentication` — wraps username + password
+- `MimeMessage` — the actual email object being constructed
+- `InternetAddress` — parses and validates email addresses
+- `Transport.send()` — static method that delivers the message
+
+**Why same App Password works for both IMAP and SMTP**
+- The App Password is tied to your Google account, not a protocol
+- Same 16-char password works for both reading and sending
+- In application.properties we just reference it twice
+
+**Spring concept used**
+- `@Service` — SmtpService is a Spring managed bean just like
+  EmailService, meaning Spring creates it and injects it
+  wherever needed via dependency injection
+
+### Phase 2 Result
+✅ Successfully sent a test email to self via Gmail SMTP
+- Email arrived in inbox within seconds
+- Subject and body transmitted correctly
+```
+
+---
+
+Add this to `NOTES.md`, then commit everything:
+```
+feat: Phase 2 complete - SMTP email sending working
