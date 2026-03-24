@@ -1,0 +1,13 @@
+# Compiled
+target/
+
+# IntelliJ
+.idea/
+*.iml
+
+# IMPORTANT — never commit credentials
+application.properties
+
+# OS
+.DS_Store
+Thumbs.db
