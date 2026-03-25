@@ -5,6 +5,11 @@ An AI-powered email automation system that reads incoming emails,
 analyzes them using rules and AI, and takes actions like replying,
 ignoring, labeling, or escalating.
 
+## Big Picture Vision
+Eventually a SaaS product where users sign up, connect their Gmail,
+set their own rules, and let the AI agent handle their inbox.
+Core engine is being built now — web layer comes after Phase 6.
+
 ---
 
 ## Tech Stack
@@ -12,15 +17,15 @@ ignoring, labeling, or escalating.
 - Jakarta Mail (angus-mail 2.0.4) — for IMAP/SMTP
 - OpenAI API — for AI classification (Phase 4)
 - Lombok — reduces boilerplate code
+- Jackson — JSON parsing (bundled with Spring Boot)
 - Maven — dependency management
 
 ---
 
 ## Phase Roadmap
-- [✅] Phase 1 — Read Emails (IMAP)
-
-- [✅] Phase 2 — Send Emails (SMTP)
-- [ ] Phase 3 — Rule Engine (JSON-based)
+- [x] Phase 1 — Read Emails (IMAP) ✅
+- [x] Phase 2 — Send Emails (SMTP) ✅
+- [x] Phase 3 — Rule Engine (JSON-based) ✅
 - [ ] Phase 4 — AI Integration (OpenAI)
 - [ ] Phase 5 — Agent Decision System
 - [ ] Phase 6 — Logging + Dashboard
@@ -31,7 +36,7 @@ ignoring, labeling, or escalating.
 
 ### What we did
 Connected to Gmail inbox using IMAP protocol and fetched the last
-10 emails, printing sender, subject, and body to the console.
+10 emails, printing sender, subject, body and metadata to console.
 
 ### Why we did it
 Before any AI or rules can work, the system needs to be able to
@@ -39,7 +44,8 @@ READ emails. This is the foundation everything else builds on.
 
 ### How it works — the flow
 App starts → EmailService connects to Gmail IMAP server →
-opens INBOX folder → loops through last 10 messages →
+searches folders with date filter (last 7 days) →
+sorts by newest first → takes top 10 →
 wraps each into EmailMessage object → prints to console
 
 ### Key files created
@@ -47,6 +53,20 @@ wraps each into EmailMessage object → prints to console
 - `service/EmailService.java` — connects to Gmail and fetches emails
 - `EmailAgentApplication.java` — entry point, triggers the fetch
 - `application.properties` — Gmail credentials config (not committed)
+- `application.properties.example` — safe template for GitHub
+
+### EmailMessage fields
+- `messageId` — unique ID of the email
+- `subject` — subject line
+- `body` — plain text content
+- `from` — sender address
+- `to` — recipient address
+- `replyTo` — where replies should go (sometimes differs from from)
+- `cc` — carbon copy recipients
+- `receivedDate` — when the email arrived
+- `isRead` — has it been read?
+- `hasAttachment` — does it have files attached?
+- `priority` — extracted from X-Priority header (HIGH/NORMAL/LOW)
 
 ### Concepts learned
 
@@ -56,17 +76,31 @@ wraps each into EmailMessage object → prints to console
 - Gmail IMAP server: imap.gmail.com, port 993, SSL enabled
 - We use READ_ONLY mode — safe, won't accidentally delete anything
 
-**SMTP (Simple Mail Transfer Protocol)**
-- Protocol for SENDING emails — we use this in Phase 2
-- Gmail SMTP server: smtp.gmail.com, port 587
+**Gmail folders via IMAP**
+- Gmail auto-sorts emails into tabs — INBOX, Promotions, Social, Updates
+- In IMAP these are separate folders: [Gmail]/Promotions etc
+- We fetch from all 4 folders and merge + sort them
+- Labels in Gmail are also exposed as IMAP folders
 
-**Jakarta Mail (angus-mail)**
-- Java library that implements IMAP and SMTP protocols
-- Key classes we used:
-    - `Session` — represents a mail session with config properties
-    - `Store` — connection to the mail server
-    - `Folder` — represents a mailbox folder like INBOX
-    - `Message` — represents a single email
+**Server-side search with ReceivedDateTerm**
+- Instead of downloading ALL emails and filtering in Java,
+  we send a date filter to Gmail's server directly
+- Only emails newer than X days are returned
+- Much faster — avoids loading thousands of old emails
+- FETCH_DAYS_BACK = 7 and MAX_EMAILS = 10 are easy to change
+
+**Jakarta Mail key classes**
+- `Session` — mail session with config properties
+- `Store` — connection to the mail server
+- `Folder` — represents a mailbox folder like INBOX
+- `Message` — represents a single email
+- `SearchTerm` — server-side filter (date, sender, subject etc)
+
+**FolderClosedException — what we learned**
+- Message objects in Jakarta Mail are lazy loaded
+- They need the folder connection open to read data
+- Fix: keep all folders open while processing, close in finally block
+- `finally` block always runs — perfect for cleanup/closing resources
 
 **App Password (Gmail)**
 - Gmail blocks normal passwords for third-party apps
@@ -76,63 +110,35 @@ wraps each into EmailMessage object → prints to console
 
 **Spring Boot concepts used**
 - `@SpringBootApplication` — marks the main entry point
-- `@Service` — marks EmailService as a Spring-managed component
+- `@Service` — marks a class as a Spring-managed component
 - `@Value("${property}")` — injects values from application.properties
 - `CommandLineRunner` — runs code immediately when app starts
 
 **Lombok annotations used**
 - `@Getter` — auto-generates getters for all fields
-- `@AllArgsConstructor` — auto-generates a constructor with all fields
-- Saves us from writing 20+ lines of boilerplate code
-
-### Why application.properties is gitignored
-It contains your Gmail credentials. If pushed to GitHub, anyone
-could read your emails. Always keep secrets out of version control.
-In real projects, secrets are stored in environment variables or
-secret managers like AWS Secrets Manager or HashiCorp Vault.
-
----
-
-## Commit History
-- `feat: Phase 1 - project setup and IMAP email fetching`
+- `@AllArgsConstructor` — auto-generates constructor with all fields
+- `@NoArgsConstructor` — auto-generates empty constructor
+- `@Setter` — auto-generates setters
+- Saves writing 20+ lines of boilerplate code
 
 ### Phase 1 Result
 ✅ Successfully fetched 10 real emails from Gmail inbox
-- Sender, subject extracted correctly for all emails
-- Body empty for HTML-only emails (to be improved later)
-- Body shows raw HTML for rich emails (to be cleaned later)
-```
+✅ Fetches from INBOX, Promotions, Social, Updates folders
+✅ Sorted by newest first using server-side date filter
+✅ Full metadata extracted per email
 
-**2. Commit and push:**
-```
-feat: Phase 1 complete - IMAP email fetching working
-Update — Enriched EmailMessage model
-Added more fields to EmailMessage to capture full email metadata:
-- `to` — recipient address
-- `replyTo` — where replies should go
-- `cc` — carbon copy
-- `receivedDate` — when email arrived
-- `isRead` — read/unread status
-- `hasAttachment` — whether files are attached
-- `priority` — extracted from X-Priority header (HIGH/NORMAL/LOW)
-
-These fields are essential for the Rule Engine in Phase 3 —
-rules can now be based on sender, read status, attachments,
-priority and more — not just subject keywords.
-
-
-
+---
 
 ## Phase 2 — Send Emails (SMTP)
 
 ### What we did
-Added the ability to send emails using Gmail's SMTP server.
+Added ability to send emails using Gmail's SMTP server.
 Tested by sending an email to ourselves and confirming it arrived.
 
 ### Why we did it
-The agent needs to be able to REPLY to emails. Without SMTP,
-it can only read — it has no voice. This is the foundation
-for auto-replies in Phase 5.
+The agent needs to be able to REPLY to emails. Without SMTP
+it can only read — it has no voice. Foundation for auto-replies
+in Phase 5.
 
 ### How it works — the flow
 SmtpService gets (to, subject, body) →
@@ -147,8 +153,7 @@ builds a MimeMessage → Transport.send() delivers it
 **SMTP (Simple Mail Transfer Protocol)**
 - Protocol specifically for SENDING emails
 - Gmail SMTP server: smtp.gmail.com, port 587
-- Port 587 uses STARTTLS — starts as plain connection then
-  upgrades to encrypted. More firewall-friendly than port 465.
+- Port 587 uses STARTTLS — starts plain then upgrades to encrypted
 
 **STARTTLS vs SSL**
 - IMAP used port 993 with SSL (encrypted from the start)
@@ -164,27 +169,18 @@ builds a MimeMessage → Transport.send() delivers it
 - `Transport.send()` — static method that delivers the message
 
 **Why same App Password works for both IMAP and SMTP**
-- The App Password is tied to your Google account, not a protocol
+- App Password is tied to your Google account, not a protocol
 - Same 16-char password works for both reading and sending
-- In application.properties we just reference it twice
 
-**Spring concept used**
-- `@Service` — SmtpService is a Spring managed bean just like
-  EmailService, meaning Spring creates it and injects it
-  wherever needed via dependency injection
+**Spring concept**
+- Both EmailService and SmtpService are `@Service` beans
+- Spring creates them and injects wherever needed automatically
 
 ### Phase 2 Result
 ✅ Successfully sent a test email to self via Gmail SMTP
-- Email arrived in inbox within seconds
-- Subject and body transmitted correctly
-```
+✅ Email arrived in inbox within seconds
 
 ---
-
-Add this to `NOTES.md`, then commit everything:
-```
-feat: Phase 2 complete - SMTP email sending working
-
 
 ## Phase 3 — Rule Engine
 
@@ -207,47 +203,63 @@ first matching rule wins → returns DecisionResult →
 if no rule matches → returns null (goes to AI in Phase 5)
 
 ### Key files created
-- `resources/rules.json` — rule definitions (editable without recompiling)
+- `resources/rules.json` — rule definitions (editable anytime)
 - `model/Rule.java` — Java object representing one rule
-- `model/DecisionResult.java` — result object: action + source + template
+- `model/DecisionResult.java` — result: action + source + template
 - `service/RuleEngineService.java` — loads and evaluates rules
 
 ### Concepts learned
 
 **Why JSON for rules?**
-Rules are stored in JSON not Java code — this means you can
-add, edit, or remove rules without recompiling the app. In the
-SaaS version, users will be able to define their own rules
-through the dashboard and the JSON updates dynamically.
+Rules are in JSON not Java code — add, edit, or remove rules
+without recompiling. In SaaS version, users define their own
+rules through the dashboard and JSON updates dynamically.
 
 **Rule matching logic**
 - Conditions use AND logic — ALL non-empty conditions must match
-- Keywords use OR logic — ANY keyword in the list triggers a match
+- Keywords use OR logic — ANY keyword in the list triggers match
 - First matching rule wins — order matters in rules.json
-- Empty string conditions are skipped (wildcard)
+- Empty string conditions are skipped (acts as wildcard)
 
 **DecisionResult — the Decision Object**
-Defined in our documentation as having: intent, action, confidence.
-We track decisionSource ("RULE" or "AI") so Phase 5 knows
-whether the decision came from a rule or from OpenAI.
+Tracks: emailId, matchedRuleId, matchedRuleName, action,
+replyTemplate, decisionSource ("RULE" or "AI").
+decisionSource tells Phase 5 where the decision came from.
 
-**Actions defined so far**
-- `reply` — send an automated reply using replyTemplate
+**Actions defined**
+- `reply` — send automated reply using replyTemplate
 - `ignore` — do nothing, skip the email
 - `escalate` — flag for human attention
 - `notify` — send a notification
-- `label` — categorize the email
+- `label` — categorize the email (Gmail label via IMAP in Phase 5)
+
+**Gmail Labels via IMAP**
+Labels in Gmail are not folders — they are tags on emails.
+But IMAP exposes them as folders. Our label action will copy
+the email to the label folder so it appears tagged in Gmail.
 
 **ObjectMapper (Jackson)**
 - Jackson is the JSON library bundled with Spring Boot
-- `objectMapper.readTree()` — parses JSON into a tree structure
-- `objectMapper.treeToValue()` — converts JSON node into a Java object
-- We already had Jackson from spring-boot-starter-web — no new dependency needed
+- `objectMapper.readTree()` — parses JSON into a tree
+- `objectMapper.treeToValue()` — converts JSON node to Java object
+- No new dependency needed — came with spring-boot-starter-web
 
 ### Phase 3 Result
-✅ Rule engine loads 4+ rules from rules.json on startup
-✅ Evaluates all fetched emails against rules
+✅ Rule engine loads rules from rules.json on startup
+✅ Evaluates all fetched emails against all rules
 ✅ Returns DecisionResult with action and source for matches
-✅ Returns null for unmatched emails (to be handled by AI in Phase 5)
+✅ Returns null for unmatched emails (AI handles in Phase 5)
+
+---
+
+## Commit History
+- `feat: Phase 1 - project setup and IMAP email fetching`
+- `feat: Phase 1 complete - IMAP email fetching working`
+- `refactor: enrich EmailMessage model with full email metadata`
+- `feat: Phase 2 complete - SMTP email sending working`
+- `feat: Phase 3 complete - JSON rule engine working`
+- `fix: FolderClosedException - keep folders open during processing`
+- `perf: server-side date filter to avoid loading all emails`
 ```
+
 

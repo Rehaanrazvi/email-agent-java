@@ -3,10 +3,14 @@ package com.emailagent.service;
 import com.emailagent.model.EmailMessage;
 import jakarta.mail.*;
 import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.search.ComparisonTerm;
+import jakarta.mail.search.ReceivedDateTerm;
+import jakarta.mail.search.SearchTerm;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
@@ -26,8 +30,14 @@ public class EmailService {
     @Value("${mail.imap.password}")
     private String password;
 
+    // How many days back to fetch — change this anytime
+    private static final int FETCH_DAYS_BACK = 7;
+    // How many emails max to process
+    private static final int MAX_EMAILS = 10;
+
     public List<EmailMessage> fetchUnreadEmails() {
         List<EmailMessage> emails = new ArrayList<>();
+        List<Folder> openFolders = new ArrayList<>();
 
         Properties props = new Properties();
         props.put("mail.store.protocol", "imaps");
@@ -40,68 +50,116 @@ public class EmailService {
             Store store = session.getStore("imaps");
             store.connect(host, username, password);
 
-            Folder inbox = store.getFolder("INBOX");
-            inbox.open(Folder.READ_ONLY);
+            // Date filter — only fetch emails from last X days
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.DAY_OF_MONTH, -FETCH_DAYS_BACK);
+            Date since = cal.getTime();
+            SearchTerm dateTerm = new ReceivedDateTerm(ComparisonTerm.GE, since);
 
-            Message[] messages = inbox.getMessages();
-            int total = messages.length;
-            int start = Math.max(0, total - 10);
+            System.out.println("Fetching emails from last " + FETCH_DAYS_BACK + " days...");
 
-            for (int i = start; i < total; i++) {
-                Message msg = messages[i];
+            // Collect messages from all folders using date filter
+            List<Message> allMessages = new ArrayList<>();
 
-                // From
-                String from = msg.getFrom() != null
-                        ? msg.getFrom()[0].toString() : "(unknown)";
+            String[] folderNames = {
+                    "INBOX",
+                    "[Gmail]/Promotions",
+                    "[Gmail]/Social",
+                    "[Gmail]/Updates"
+            };
 
-                // To
-                String to = msg.getRecipients(Message.RecipientType.TO) != null
-                        ? msg.getRecipients(Message.RecipientType.TO)[0].toString() : "(unknown)";
+            for (String folderName : folderNames) {
+                try {
+                    Folder folder = store.getFolder(folderName);
+                    if (folder.exists()) {
+                        folder.open(Folder.READ_ONLY);
+                        openFolders.add(folder);
 
-                // Subject
-                String subject = msg.getSubject() != null
-                        ? msg.getSubject() : "(no subject)";
-
-                // Reply-To
-                String replyTo = msg.getReplyTo() != null && msg.getReplyTo().length > 0
-                        ? msg.getReplyTo()[0].toString() : from;
-
-                // CC
-                String cc = msg.getRecipients(Message.RecipientType.CC) != null
-                        ? msg.getRecipients(Message.RecipientType.CC)[0].toString() : "";
-
-                // Date
-                Date receivedDate = msg.getReceivedDate() != null
-                        ? msg.getReceivedDate() : msg.getSentDate();
-
-                // Read status
-                boolean isRead = msg.isSet(Flags.Flag.SEEN);
-
-                // Attachment check
-                boolean hasAttachment = hasAttachment(msg);
-
-                // Priority
-                String priority = extractPriority(msg);
-
-                // Body
-                String body = extractBody(msg);
-
-                // Message ID
-                String id = String.valueOf(msg.getMessageNumber());
-
-                emails.add(new EmailMessage(
-                        id, subject, body, from, to,
-                        replyTo, cc, receivedDate,
-                        isRead, hasAttachment, priority
-                ));
+                        // Search with date filter — only recent emails
+                        Message[] messages = folder.search(dateTerm);
+                        allMessages.addAll(List.of(messages));
+                        System.out.println("Found " + messages.length
+                                + " recent emails in: " + folderName);
+                    }
+                } catch (Exception e) {
+                    System.out.println("Skipping folder: "
+                            + folderName + " — " + e.getMessage());
+                }
             }
 
-            inbox.close(false);
-            store.close();
+            // Sort by date — newest first
+            allMessages.sort((a, b) -> {
+                try {
+                    Date dateA = a.getReceivedDate() != null
+                            ? a.getReceivedDate() : a.getSentDate();
+                    Date dateB = b.getReceivedDate() != null
+                            ? b.getReceivedDate() : b.getSentDate();
+                    if (dateA == null || dateB == null) return 0;
+                    return dateB.compareTo(dateA);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+
+            // Take top MAX_EMAILS
+            List<Message> topEmails = allMessages.subList(
+                    0, Math.min(MAX_EMAILS, allMessages.size()));
+
+            System.out.println("Processing top " + topEmails.size() + " emails...\n");
+
+            // Process each message
+            for (Message msg : topEmails) {
+                try {
+                    String from = msg.getFrom() != null
+                            ? msg.getFrom()[0].toString() : "(unknown)";
+
+                    String to = msg.getRecipients(Message.RecipientType.TO) != null
+                            ? msg.getRecipients(Message.RecipientType.TO)[0].toString()
+                            : "(unknown)";
+
+                    String subject = msg.getSubject() != null
+                            ? msg.getSubject() : "(no subject)";
+
+                    String replyTo = msg.getReplyTo() != null
+                            && msg.getReplyTo().length > 0
+                            ? msg.getReplyTo()[0].toString() : from;
+
+                    String cc = "";
+                    if (msg.getRecipients(Message.RecipientType.CC) != null) {
+                        cc = msg.getRecipients(
+                                Message.RecipientType.CC)[0].toString();
+                    }
+
+                    Date receivedDate = msg.getReceivedDate() != null
+                            ? msg.getReceivedDate() : msg.getSentDate();
+
+                    boolean isRead = msg.isSet(Flags.Flag.SEEN);
+                    boolean hasAttachment = hasAttachment(msg);
+                    String priority = extractPriority(msg);
+                    String body = extractBody(msg);
+                    String id = String.valueOf(msg.getMessageNumber());
+
+                    emails.add(new EmailMessage(
+                            id, subject, body, from, to,
+                            replyTo, cc, receivedDate,
+                            isRead, hasAttachment, priority
+                    ));
+
+                } catch (Exception e) {
+                    System.out.println("Skipping one email: " + e.getMessage());
+                }
+            }
 
         } catch (Exception e) {
             System.err.println("Error fetching emails: " + e.getMessage());
             e.printStackTrace();
+
+        } finally {
+            for (Folder folder : openFolders) {
+                try {
+                    if (folder.isOpen()) folder.close(false);
+                } catch (Exception ignored) {}
+            }
         }
 
         return emails;
