@@ -1,0 +1,72 @@
+{
+  "rules": [
+    {
+      "id": "rule_001",
+      "name": "Job Application Reply",
+      "conditions": {
+        "subjectContains": ["job", "application", "hiring", "recruitment", "opportunity"],
+        "from": "",
+        "hasAttachment": false,
+        "priority": ""
+      },
+      "action": "reply",
+      "replyTemplate": "Thank you for reaching out! I will get back to you shortly."
+    },
+    {
+      "id": "rule_002",
+      "name": "Spam Filter",
+      "conditions": {
+        "subjectContains": ["win", "free", "lucky", "prize", "offer", "discount", "Luxe"],
+        "from": "",
+        "hasAttachment": false,
+        "priority": ""
+      },
+      "action": "ignore"
+    },
+    {
+      "id": "rule_003",
+      "name": "Urgent Email Escalate",
+      "conditions": {
+        "subjectContains": [],
+        "from": "",
+        "hasAttachment": false,
+        "priority": "HIGH"
+      },
+      "action": "escalate"
+    },
+    {
+      "id": "rule_004",
+      "name": "Attachment Notification",
+      "conditions": {
+        "subjectContains": [],
+        "from": "",
+        "hasAttachment": true,
+        "priority": ""
+      },
+      "action": "notify",
+      "replyTemplate": "You have received an email with an attachment."
+    },
+    {
+      "id": "rule_005",
+      "name": "Google Security Alert",
+      "conditions": {
+        "subjectContains": ["Security alert", "Verification"],
+        "from": "google.com",
+        "hasAttachment": false,
+        "priority": ""
+      },
+      "action": "label"
+    },
+    {
+      "id": "rule_006",
+      "name": "Quora Digest",
+      "conditions": {
+        "subjectContains": [],
+        "from": "quora.com",
+        "hasAttachment": false,
+        "priority": ""
+      },
+      "action": "ignore"
+    }
+  ]
+}

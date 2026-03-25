@@ -1,7 +1,9 @@
 package com.emailagent;
 
+import com.emailagent.model.DecisionResult;
 import com.emailagent.model.EmailMessage;
 import com.emailagent.service.EmailService;
+import com.emailagent.service.RuleEngineService;
 import com.emailagent.service.SmtpService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -18,22 +20,27 @@ public class EmailAgentJavaApplication {
     }
 
     @Bean
-    public CommandLineRunner run(EmailService emailService, SmtpService smtpService) {
+    public CommandLineRunner run(EmailService emailService,
+                                 SmtpService smtpService,
+                                 RuleEngineService ruleEngineService) {
         return args -> {
 
             // Phase 1 — Read emails
             System.out.println("=== Phase 1: Fetching Emails ===");
             List<EmailMessage> emails = emailService.fetchUnreadEmails();
             System.out.println("Fetched " + emails.size() + " emails\n");
-            emails.forEach(System.out::println);
 
-            // Phase 2 — Send a test email
-            System.out.println("\n=== Phase 2: Sending Test Email ===");
-            smtpService.sendEmail(
-                    "rehanrazvi222@gmail.com",   // send to yourself for testing
-                    "Test from AI Email Agent",
-                    "Hello! This email was sent automatically by your AI Email Agent. Phase 2 is working!"
-            );
+            // Phase 3 — Apply rules
+            System.out.println("=== Phase 3: Applying Rules ===");
+            for (EmailMessage email : emails) {
+                System.out.println("Processing: " + email.getSubject());
+                DecisionResult decision = ruleEngineService.evaluate(email);
+                if (decision != null) {
+                    System.out.println(decision);
+                } else {
+                    System.out.println("→ No rule matched for: " + email.getSubject());
+                }
+            }
         };
     }
 }

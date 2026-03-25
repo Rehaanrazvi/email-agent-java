@@ -185,3 +185,69 @@ Add this to `NOTES.md`, then commit everything:
 ```
 feat: Phase 2 complete - SMTP email sending working
 
+
+## Phase 3 — Rule Engine
+
+### What we did
+Built a JSON-based rule engine that loads rules from rules.json
+and matches them against incoming emails to decide what action
+to take.
+
+### Why we did it
+Not every email needs AI — simple patterns like spam keywords
+or known senders can be handled instantly with rules. Rules are
+faster, cheaper, and more predictable than AI. AI is the
+fallback for emails rules can't handle (Phase 5).
+
+### How it works — the flow
+RuleEngineService loads rules.json on startup →
+for each email, loops through all rules →
+checks conditions (keywords, sender, attachment, priority) →
+first matching rule wins → returns DecisionResult →
+if no rule matches → returns null (goes to AI in Phase 5)
+
+### Key files created
+- `resources/rules.json` — rule definitions (editable without recompiling)
+- `model/Rule.java` — Java object representing one rule
+- `model/DecisionResult.java` — result object: action + source + template
+- `service/RuleEngineService.java` — loads and evaluates rules
+
+### Concepts learned
+
+**Why JSON for rules?**
+Rules are stored in JSON not Java code — this means you can
+add, edit, or remove rules without recompiling the app. In the
+SaaS version, users will be able to define their own rules
+through the dashboard and the JSON updates dynamically.
+
+**Rule matching logic**
+- Conditions use AND logic — ALL non-empty conditions must match
+- Keywords use OR logic — ANY keyword in the list triggers a match
+- First matching rule wins — order matters in rules.json
+- Empty string conditions are skipped (wildcard)
+
+**DecisionResult — the Decision Object**
+Defined in our documentation as having: intent, action, confidence.
+We track decisionSource ("RULE" or "AI") so Phase 5 knows
+whether the decision came from a rule or from OpenAI.
+
+**Actions defined so far**
+- `reply` — send an automated reply using replyTemplate
+- `ignore` — do nothing, skip the email
+- `escalate` — flag for human attention
+- `notify` — send a notification
+- `label` — categorize the email
+
+**ObjectMapper (Jackson)**
+- Jackson is the JSON library bundled with Spring Boot
+- `objectMapper.readTree()` — parses JSON into a tree structure
+- `objectMapper.treeToValue()` — converts JSON node into a Java object
+- We already had Jackson from spring-boot-starter-web — no new dependency needed
+
+### Phase 3 Result
+✅ Rule engine loads 4+ rules from rules.json on startup
+✅ Evaluates all fetched emails against rules
+✅ Returns DecisionResult with action and source for matches
+✅ Returns null for unmatched emails (to be handled by AI in Phase 5)
+```
+
