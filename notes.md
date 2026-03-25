@@ -17,8 +17,9 @@ ignoring, labeling, or escalating.
 ---
 
 ## Phase Roadmap
-- [x] Phase 1 — Read Emails (IMAP)
-- [ ] Phase 2 — Send Emails (SMTP)
+- [✅] Phase 1 — Read Emails (IMAP)
+
+- [✅] Phase 2 — Send Emails (SMTP)
 - [ ] Phase 3 — Rule Engine (JSON-based)
 - [ ] Phase 4 — AI Integration (OpenAI)
 - [ ] Phase 5 — Agent Decision System
@@ -105,6 +106,19 @@ secret managers like AWS Secrets Manager or HashiCorp Vault.
 **2. Commit and push:**
 ```
 feat: Phase 1 complete - IMAP email fetching working
+Update — Enriched EmailMessage model
+Added more fields to EmailMessage to capture full email metadata:
+- `to` — recipient address
+- `replyTo` — where replies should go
+- `cc` — carbon copy
+- `receivedDate` — when email arrived
+- `isRead` — read/unread status
+- `hasAttachment` — whether files are attached
+- `priority` — extracted from X-Priority header (HIGH/NORMAL/LOW)
+
+These fields are essential for the Rule Engine in Phase 3 —
+rules can now be based on sender, read status, attachments,
+priority and more — not just subject keywords.
 
 
 
@@ -170,3 +184,4 @@ builds a MimeMessage → Transport.send() delivers it
 Add this to `NOTES.md`, then commit everything:
 ```
 feat: Phase 2 complete - SMTP email sending working
+

@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 
@@ -44,16 +45,55 @@ public class EmailService {
 
             Message[] messages = inbox.getMessages();
             int total = messages.length;
-            int start = Math.max(0, total - 10); // last 10 emails
+            int start = Math.max(0, total - 10);
 
             for (int i = start; i < total; i++) {
                 Message msg = messages[i];
-                String subject = msg.getSubject() != null ? msg.getSubject() : "(no subject)";
-                String from    = msg.getFrom() != null ? msg.getFrom()[0].toString() : "(unknown)";
-                String body    = extractBody(msg);
-                String id      = String.valueOf(msg.getMessageNumber());
 
-                emails.add(new EmailMessage(id, subject, body, from));
+                // From
+                String from = msg.getFrom() != null
+                        ? msg.getFrom()[0].toString() : "(unknown)";
+
+                // To
+                String to = msg.getRecipients(Message.RecipientType.TO) != null
+                        ? msg.getRecipients(Message.RecipientType.TO)[0].toString() : "(unknown)";
+
+                // Subject
+                String subject = msg.getSubject() != null
+                        ? msg.getSubject() : "(no subject)";
+
+                // Reply-To
+                String replyTo = msg.getReplyTo() != null && msg.getReplyTo().length > 0
+                        ? msg.getReplyTo()[0].toString() : from;
+
+                // CC
+                String cc = msg.getRecipients(Message.RecipientType.CC) != null
+                        ? msg.getRecipients(Message.RecipientType.CC)[0].toString() : "";
+
+                // Date
+                Date receivedDate = msg.getReceivedDate() != null
+                        ? msg.getReceivedDate() : msg.getSentDate();
+
+                // Read status
+                boolean isRead = msg.isSet(Flags.Flag.SEEN);
+
+                // Attachment check
+                boolean hasAttachment = hasAttachment(msg);
+
+                // Priority
+                String priority = extractPriority(msg);
+
+                // Body
+                String body = extractBody(msg);
+
+                // Message ID
+                String id = String.valueOf(msg.getMessageNumber());
+
+                emails.add(new EmailMessage(
+                        id, subject, body, from, to,
+                        replyTo, cc, receivedDate,
+                        isRead, hasAttachment, priority
+                ));
             }
 
             inbox.close(false);
@@ -79,8 +119,34 @@ public class EmailService {
                     sb.append(part.getContent().toString());
                 }
             }
-            return sb.toString();
+            return sb.isEmpty() ? "(html only email)" : sb.toString();
         }
         return "(unable to extract body)";
+    }
+
+    private boolean hasAttachment(Message message) throws Exception {
+        if (message.getContentType().startsWith("multipart")) {
+            MimeMultipart multipart = (MimeMultipart) message.getContent();
+            for (int i = 0; i < multipart.getCount(); i++) {
+                BodyPart part = multipart.getBodyPart(i);
+                if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private String extractPriority(Message message) throws Exception {
+        String[] headers = message.getHeader("X-Priority");
+        if (headers != null && headers.length > 0) {
+            return switch (headers[0].trim()) {
+                case "1" -> "HIGH";
+                case "3" -> "NORMAL";
+                case "5" -> "LOW";
+                default  -> "NORMAL";
+            };
+        }
+        return "NORMAL";
     }
 }
