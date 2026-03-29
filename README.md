@@ -152,7 +152,6 @@ Each rule has conditions and an action:
 Built by **Rehaan** as a backend engineering project targeting SDE roles.
 
 > "Not just a portfolio project — building toward a real product."
-```
 
 ---
 
