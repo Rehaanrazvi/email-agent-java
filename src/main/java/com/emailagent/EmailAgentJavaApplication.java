@@ -2,6 +2,7 @@ package com.emailagent;
 
 import com.emailagent.model.DecisionResult;
 import com.emailagent.model.EmailMessage;
+import com.emailagent.service.AIService;
 import com.emailagent.service.EmailService;
 import com.emailagent.service.RuleEngineService;
 import com.emailagent.service.SmtpService;
@@ -22,23 +23,24 @@ public class EmailAgentJavaApplication {
     @Bean
     public CommandLineRunner run(EmailService emailService,
                                  SmtpService smtpService,
-                                 RuleEngineService ruleEngineService) {
+                                 RuleEngineService ruleEngineService,
+                                 AIService aiService) {
         return args -> {
 
-            // Phase 1 — Read emails
             System.out.println("=== Phase 1: Fetching Emails ===");
             List<EmailMessage> emails = emailService.fetchUnreadEmails();
             System.out.println("Fetched " + emails.size() + " emails\n");
 
-            // Phase 3 — Apply rules
-            System.out.println("=== Phase 3: Applying Rules ===");
+            System.out.println("=== Phase 3 + 4: Rules → AI Fallback ===");
             for (EmailMessage email : emails) {
-                System.out.println("Processing: " + email.getSubject());
+                System.out.println("\nProcessing: " + email.getSubject());
                 DecisionResult decision = ruleEngineService.evaluate(email);
                 if (decision != null) {
-                    System.out.println(decision);
+                    System.out.println("→ RULE matched: " + decision);
                 } else {
-                    System.out.println("→ No rule matched for: " + email.getSubject());
+                    System.out.println("→ No rule matched, asking AI...");
+                    DecisionResult aiDecision = aiService.classify(email);
+                    System.out.println("→ AI decided: " + aiDecision);
                 }
             }
         };

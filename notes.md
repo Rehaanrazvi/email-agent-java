@@ -250,6 +250,55 @@ the email to the label folder so it appears tagged in Gmail.
 ✅ Returns DecisionResult with action and source for matches
 ✅ Returns null for unmatched emails (AI handles in Phase 5)
 
+
+## Phase 4 — AI Integration (Groq/Llama)
+
+### What we did
+Integrated Groq's free LLM API (Llama 3.1) to classify emails
+that don't match any rule. AI returns intent, action and confidence.
+
+### Why we did it
+Rules can't handle every email — unknown senders, unusual subjects,
+context-dependent emails need intelligence. AI fills that gap.
+
+### How it works — the flow
+Email fails rule matching → AIService sends prompt to Groq API →
+Llama classifies email → returns intent + action + confidence →
+wrapped into DecisionResult with source "AI"
+
+### Key files
+- `service/AIService.java` — calls Groq API and parses response
+
+### Concepts learned
+
+**Why Groq over OpenAI/Gemini?**
+- OpenAI requires paid credits
+- Gemini free tier had limit:0 for this Google account/region
+- Groq is completely free, no card needed, very fast
+- Uses open source Llama model — same quality for classification
+
+**Prompt engineering**
+- We tell the AI exactly what format to respond in
+- Strict JSON only — no extra text
+- Define allowed actions explicitly in the prompt
+- System message sets the AI's role and constraints
+
+**ObjectMapper for request building**
+- Never build JSON by hand with string concatenation
+- Special characters (emojis, Hindi, quotes) break manual JSON
+- ObjectMapper.createObjectNode() builds valid JSON safely always
+
+**Jackson JSON parsing**
+- `root.path("choices").get(0).path("message").path("content")`
+- `.path()` is null-safe, `.get()` can return null — use carefully
+- Strip ```json fences — AI sometimes wraps response in markdown
+
+### Phase 4 Result
+✅ Groq API connected and working
+✅ Llama 3.1 classifying emails intelligently
+✅ Rule engine + AI fallback working together as pipeline
+✅ DecisionResult correctly shows source as "AI" vs "RULE"
+
 ---
 
 ## Commit History
