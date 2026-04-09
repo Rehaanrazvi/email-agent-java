@@ -39,40 +39,39 @@ public class AgentService {
     public void run() {
         System.out.println("\n🔄 Agent run started...");
 
-        List<EmailMessage> emails = emailService.fetchUnreadEmails();
-        System.out.println("📥 Fetched " + emails.size() + " emails");
+        List<EmailMessage> allEmails = emailService.fetchUnreadEmails();
+        System.out.println("📥 Fetched " + allEmails.size() + " emails from Gmail");
 
-        int newCount = 0;
+        // Filter processed + own emails → take 10 genuinely new ones
+        List<EmailMessage> newEmails = allEmails.stream()
+                .filter(email -> !loggerService.isAlreadyProcessed(
+                        USER_ID, email.getMessageId()))
+                .filter(email -> !email.getFrom().contains(emailUsername))
+                .limit(10)
+                .collect(java.util.stream.Collectors.toList());
 
-        for (EmailMessage email : emails) {
+        System.out.println("🆕 New emails to process: " + newEmails.size());
 
-            // Skip already processed emails
-            if (loggerService.isAlreadyProcessed(USER_ID, email.getMessageId())) {
-                System.out.println("⏩ Already processed: " + email.getSubject());
-                continue;
-            }
-            // Skip emails sent by ourselves
-            if (email.getFrom().contains(emailUsername)) {
-                System.out.println("⏩ Skipping own email: " + email.getSubject());
-                continue;
-            }
+        if (newEmails.isEmpty()) {
+            System.out.println("✅ Nothing new to process.");
+            loggerService.printStats(USER_ID);
+            return;
+        }
 
-            newCount++;
+        for (EmailMessage email : newEmails) {
             System.out.println("\n📧 " + email.getSubject()
                     + " | from: " + email.getFrom());
 
-            // Rule engine first
             DecisionResult decision = ruleEngineService.evaluate(email);
 
-            // AI fallback
             if (decision == null) {
                 System.out.println("→ No rule matched, asking AI...");
                 decision = aiService.classify(email);
             } else {
-                System.out.println("→ Rule matched: " + decision.getMatchedRuleName());
+                System.out.println("→ Rule matched: "
+                        + decision.getMatchedRuleName());
             }
 
-            // Execute action
             boolean success = false;
             try {
                 actionService.execute(email, decision);
@@ -81,11 +80,10 @@ public class AgentService {
                 System.err.println("Action failed: " + e.getMessage());
             }
 
-            // Log to database
             loggerService.log(USER_ID, email, decision, success);
         }
 
-        System.out.println("\n✅ Run complete. New emails processed: " + newCount);
+        System.out.println("\n✅ Run complete. Processed: " + newEmails.size());
         loggerService.printStats(USER_ID);
     }
 }

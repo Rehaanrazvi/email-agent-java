@@ -32,8 +32,6 @@ public class EmailService {
 
     // How many days back to fetch — change this anytime
     private static final int FETCH_DAYS_BACK = 7;
-    // How many emails max to process
-    private static final int MAX_EMAILS = 10;
 
     public List<EmailMessage> fetchUnreadEmails() {
         List<EmailMessage> emails = new ArrayList<>();
@@ -101,14 +99,13 @@ public class EmailService {
                 }
             });
 
-            // Take top MAX_EMAILS
-            List<Message> topEmails = allMessages.subList(
-                    0, Math.min(MAX_EMAILS, allMessages.size()));
-
-            System.out.println("Processing top " + topEmails.size() + " emails...\n");
+            // NO subList cap here — return ALL emails in date window
+            // AgentService decides how many to actually process
+            System.out.println("Total emails in window: "
+                    + allMessages.size() + "\n");
 
             // Process each message
-            for (Message msg : topEmails) {
+            for (Message msg : allMessages) {
                 try {
                     String from = msg.getFrom() != null
                             ? msg.getFrom()[0].toString() : "(unknown)";
