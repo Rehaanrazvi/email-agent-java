@@ -29,8 +29,11 @@ public class AIService {
 
     public DecisionResult classify(EmailMessage email) {
         try {
-            String prompt = "Classify this email. Respond with JSON only, no extra text:\n"
-                    + "{ \"intent\": \"...\", \"action\": \"reply|ignore|escalate|label|notify\", \"confidence\": 0.0 }\n\n"
+            String prompt = "Classify this email. Respond with JSON only:\n"
+                    + "{ \"intent\": \"...\", \"action\": \"reply|ignore|escalate|label\", \"confidence\": 0.0 }\n\n"
+                    + "Rules: Use 'ignore' for social media, newsletters, notifications.\n"
+                    + "Only use 'reply' for emails that genuinely need a human response.\n"
+                    + "Never use 'notify' action.\n\n"
                     + "From: " + email.getFrom() + "\n"
                     + "Subject: " + email.getSubject() + "\n"
                     + "Body: " + email.getBody().substring(0, Math.min(email.getBody().length(), 300));

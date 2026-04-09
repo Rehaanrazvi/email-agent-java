@@ -299,6 +299,155 @@ wrapped into DecisionResult with source "AI"
 ✅ Rule engine + AI fallback working together as pipeline
 ✅ DecisionResult correctly shows source as "AI" vs "RULE"
 
+## Phase 5 — Agent Decision System
+
+### What we did
+Built the ActionService that actually EXECUTES decisions made by
+the rule engine and AI. The agent now reads, decides, AND acts.
+
+### Why we did it
+Phases 1-4 were all thinking — no doing. Phase 5 gives the agent
+hands. It can now reply, ignore, escalate, notify and label emails
+automatically without human intervention.
+
+### How it works — the flow
+DecisionResult → ActionService.execute() →
+switch on action type → call appropriate method →
+reply via SmtpService / ignore / escalate / notify / label
+
+### Key files created
+- `service/ActionService.java` — executes decisions
+
+### Actions implemented
+- `reply` — sends automated reply using replyTemplate from rules
+  or default template if AI decision
+- `ignore` — skips the email, logs it
+- `escalate` — forwards email to owner with ESCALATION subject
+- `notify` — sends notification email to owner
+- `label` — placeholder for now, real IMAP labeling in Phase 6
+
+### Concepts learned
+
+**Switch expressions (Java 14+)**
+- `case "reply" -> executeReply()` — arrow syntax, no fall-through
+- Cleaner than traditional switch with break statements
+- Each case calls a dedicated private method — single responsibility
+
+**Constructor injection vs @Autowired**
+- We inject SmtpService via constructor not @Autowired field
+- Constructor injection is preferred — makes dependencies explicit,
+  easier to test, works with final fields
+- Spring automatically injects when there's one constructor
+
+**replyTo vs from**
+- Emails have a `Reply-To` header separate from `From`
+- Newsletters often have From: newsletter@company.com but
+  Reply-To: no-reply@company.com
+- Always reply to `replyTo` first, fall back to `from`
+
+### Phase 5 Result
+✅ ActionService executing all 5 action types
+✅ Real emails being replied to via SMTP
+✅ Full pipeline working: Fetch → Rule/AI → Execute
+
+---
+
+## Phase 6 — Logging + Spring Scheduler
+
+### What we did
+Added MySQL database logging for every decision, Spring Scheduler
+for automatic runs every 2 minutes, and memory so the agent never
+processes the same email twice.
+
+### Why we did it
+Without logging the agent has no memory — it processes the same
+emails every run. Without scheduler it needs manual starts.
+Phase 6 makes it a true autonomous background agent.
+
+### How it works — the flow
+App starts once → Scheduler triggers every 2 minutes →
+fetch emails → check MySQL for already processed IDs →
+skip known emails → process new ones → log to MySQL → repeat
+
+### Key files created
+- `model/ProcessedEmail.java` — JPA entity, maps to MySQL table
+- `repository/ProcessedEmailRepository.java` — database queries
+- `service/LoggerService.java` — checks + saves processed emails
+- `service/AgentService.java` — main scheduled agent orchestrator
+
+### Files updated
+- `EmailAgentApplication.java` — added @EnableScheduling,
+  removed CommandLineRunner (AgentService replaces it)
+- `application.properties` — MySQL config + scheduler interval
+- `pom.xml` — added spring-boot-starter-data-jpa + mysql-connector
+
+### Concepts learned
+
+**Spring Scheduler**
+- `@EnableScheduling` on main class enables the scheduler
+- `@Scheduled(fixedDelayString = "${agent.poll.interval.ms}")`
+  runs a method repeatedly with a fixed delay between runs
+- `fixedDelay` = waits X ms AFTER previous run completes
+- `fixedRate` = runs every X ms regardless of previous run time
+- We use fixedDelay — safer, prevents overlapping runs
+
+**JPA and Spring Data**
+- JPA (Jakarta Persistence API) — standard for ORM in Java
+- Hibernate is the JPA implementation Spring Boot uses
+- `@Entity` — marks class as a database table
+- `@Table(name="processed_emails")` — sets table name
+- `@Id` — marks primary key field
+- `@GeneratedValue(strategy = GenerationType.IDENTITY)` — auto increment
+- Spring auto-creates the table on first run with `ddl-auto=update`
+
+**Spring Data JPA Repository**
+- Extend `JpaRepository<Entity, IdType>` — get CRUD for free
+- Method name conventions generate SQL automatically:
+    - `existsByUserIdAndEmailId()` → SELECT EXISTS WHERE userId=? AND emailId=?
+    - `findByUserIdOrderByProcessedAtDesc()` → SELECT * WHERE userId=? ORDER BY processedAt DESC
+    - `countByUserIdAndAction()` → SELECT COUNT(*) WHERE userId=? AND action=?
+- No SQL written — Spring generates it from method names
+
+**HikariCP Connection Pool**
+- HikariCP is Spring Boot's default connection pool
+- Instead of opening a new DB connection per request (slow),
+  it maintains a pool of ready connections
+- Automatically included with spring-boot-starter-data-jpa
+
+**userId field — SaaS-ready design**
+- Every log entry has a `userId` field — currently "default_user"
+- When SaaS is built, each user's emails are isolated by userId
+- Zero code changes needed — just pass real userId instead of constant
+- This is forward-compatible design
+
+**Why MySQL over JSON file**
+- JSON file breaks under concurrent access (multiple users)
+- MySQL handles concurrent reads/writes safely
+- Scales to millions of records with indexes
+- Same JPA code works with PostgreSQL — just change config
+- Real querying — filter by date, action, source, confidence
+
+**fixedDelay vs fixedRate**
+- `fixedDelay=120000` — waits 2 min AFTER run completes
+  If run takes 30s → next run starts at 2m30s
+- `fixedRate=120000` — runs every 2 min from start
+  If run takes 30s → next run starts at 2m exactly
+  Risk: runs can overlap if processing is slow
+
+**spring.jpa.open-in-view=false**
+- By default Spring keeps DB connection open during view rendering
+- We disabled it — best practice, prevents connection pool exhaustion
+- Important for SaaS with many concurrent users
+
+### Phase 6 Result
+✅ MySQL connected, table auto-created
+✅ Every decision logged with timestamp, action, source
+✅ Memory working — already processed emails skipped on next run
+✅ Agent runs automatically every 2 minutes via Spring Scheduler
+✅ Stats printed after every run
+✅ SaaS-ready with userId field for multi-user support
+✅ Tomcat running on port 8080 — ready for REST API layer
+
 ---
 
 ## Commit History
@@ -309,6 +458,8 @@ wrapped into DecisionResult with source "AI"
 - `feat: Phase 3 complete - JSON rule engine working`
 - `fix: FolderClosedException - keep folders open during processing`
 - `perf: server-side date filter to avoid loading all emails`
-```
+- `feat: Phase 4 complete - AI email classification with Groq/Llama`
+- `feat: Phase 5 complete - agent decision system executing actions`
+- `feat: Phase 6 complete - MySQL logging + Spring Scheduler auto-run`
 
 

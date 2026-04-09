@@ -67,6 +67,28 @@
         "priority": ""
       },
       "action": "ignore"
+    },
+    {
+      "id": "rule_007",
+      "name": "Instagram Ignore",
+      "conditions": {
+        "subjectContains": [],
+        "from": "instagram.com",
+        "hasAttachment": false,
+        "priority": ""
+      },
+      "action": "ignore"
+    },
+    {
+      "id": "rule_008",
+      "name": "Reddit Ignore",
+      "conditions": {
+        "subjectContains": [],
+        "from": "redditmail.com",
+        "hasAttachment": false,
+        "priority": ""
+      },
+      "action": "ignore"
     }
   ]
 }
